@@ -11,27 +11,50 @@ using namespace std;
 
 #define BUFFERSIZE 512
 
+char **split_input(char *input){
+	char **command = (char **)malloc(512 * sizeof(char *));
+	char *parsed;
+	int index = 0;
+	parsed = strtok(input, " \n");
+        while (parsed != NULL) {
+        	command[index] = parsed;
+            	index++;
+		parsed = strtok(NULL, " \n");
+        } 
+
+    command[index] = NULL;
+    return command;
+}
+
 void shell_loop(int flag){
 	char line[BUFFERSIZE];
-	char **args;
-	int signal;
+	char **split;
+	char *cmd;
+	pid_t child_pid;
+	int stat_loc;
 	do{
 		if(!flag)
 			printf("shell: ");
 		fgets(line,BUFFERSIZE,stdin);
-		//args = split_input(line);
-		//signal = prog_execute(args);
-		printf("%s",line);
+		split = split_input(line);
 		
+		cmd = split[0];
+		child_pid = fork();
+		
+		if (child_pid == 0) {
+			printf("%s",args[1]);
+			execvp(cmd, split);
+			printf("this is a failure\n");
+
+		} else if (child_pid > 0) {
+			//parent process
+			waitpid(child_pid, &stat_loc, WUNTRACED);
+		} else {
+			//fork failed
+			printf("fork failed\n");
+		}
 	} while(!feof(stdin));
 }
-
-
-//char **split_input(char * input){
-
-
-
-
 
 
 
