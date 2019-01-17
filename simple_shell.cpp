@@ -11,6 +11,7 @@ using namespace std;
 
 #define BUFFERSIZE 512
 
+
 char **split_input(char *input){
 	char **command = (char **)malloc(512 * sizeof(char *));
 	char *parsed;
@@ -26,10 +27,32 @@ char **split_input(char *input){
     return command;
 }
 
+char *clean_input(char *input){
+	char * clean = (char *)malloc(1024 * sizeof(char));
+	int j = 1;
+	clean[0] = input[0];
+	for( int i = 1; input[i]!='\0'; ++i){
+		if((input[i] == '<') || (input[i] == '>') || (input[i] == '|') || (input[i] == '<')){
+			clean[j] = ' ';
+			clean[j+1] = input[i];
+			clean[j+2] = ' ';
+			j = j+3;
+		}
+		else{
+			clean[j] = input[i];
+			j = j+1;
+		}
+	}
+	clean[j] = '\0';
+	return clean;
+}
+	
+
 void shell_loop(int flag){
 	char line[BUFFERSIZE];
 	char **split;
 	char *cmd;
+	char *test;
 	pid_t child_pid;
 	int stat_loc;
 	do{
@@ -37,15 +60,13 @@ void shell_loop(int flag){
 			printf("shell: ");
 		fgets(line,BUFFERSIZE,stdin);
 		split = split_input(line);
-		
+		test = clean_input(line);
 		cmd = split[0];
 		child_pid = fork();
 		
 		if (child_pid == 0) {
-			printf("%s",args[1]);
 			execvp(cmd, split);
-			printf("this is a failure\n");
-
+			perror("ERROR: ");
 		} else if (child_pid > 0) {
 			//parent process
 			waitpid(child_pid, &stat_loc, WUNTRACED);
@@ -53,6 +74,8 @@ void shell_loop(int flag){
 			//fork failed
 			printf("fork failed\n");
 		}
+		bzero(line,BUFFERSIZE);
+		fflush(stdin);
 	} while(!feof(stdin));
 }
 
