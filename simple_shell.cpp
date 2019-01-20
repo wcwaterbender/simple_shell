@@ -77,62 +77,41 @@ static void split(char* cmd)
 static int command(int input,int output, int first, int last)
 {
 	int pipettes[2];
-
-	pipe( pipettes );
+ 
+	pipe( pipettes );	
 	pid = fork();
-
-	/*if (pid == 0) {//child process
+ 
+	if (pid == 0) {
 		if (first == 1 && last == 0 && input == 0) {
-			// First command without redirection
+			// First command
 			dup2( pipettes[WRITE], STDOUT_FILENO );
-		} 
-		
-		else if (first == 1 && last == 0 && input != 0){
-			close(STDOUT_FILENO);
-			dup2(input, STDIN_FILENO);
-			dup2( pipettes[WRITE], STDOUT_FILENO);
-		}
-		else if (first == 0 && last == 0 && input != 0) {
+		} else if (first == 0 && last == 0 && input != 0) {
 			// middle commands
 			dup2(input, STDIN_FILENO);
 			dup2(pipettes[WRITE], STDOUT_FILENO);
-
+		}else if (last ==1  && output != 0){//last command with output redir
+		       dup2( input, 0);
+		       dup2(output, 1);
 		} else {
 			// last command
 			dup2( input, STDIN_FILENO );
 		}
-*/
-
-	if (pid == 0) {
-		if (first == 1) {
-			// First command
-			dup2( pipettes[WRITE], STDOUT_FILENO );
-		}else {
-			// Second command
-			if (output==0) {
-			dup2( input, STDIN_FILENO ); //display on prompt
-			}else {
-				// Second command
-				dup2( input, 0);
-				dup2(output, 1);
-			}
-		}
-
+ 
 		if (execvp( args[0], args) == -1)
-			perror("ERROR: ");  // If child fails
+			_exit(EXIT_FAILURE); // If child fails
 	}
-
-	if (input != 0)
+ 
+	if (input != 0) 
 		close(input);
-
+ 
 	// Nothing more needs to be written
 	close(pipettes[WRITE]);
-
+ 
 	// If it's the last command, nothing more needs to be read
 	if  (last == 1)
 		close(pipettes[READ]);
-
-	return pipettes[READ];
+ 
+	return pipettes[READ];	
 }
 
 static void cleanup(int n)

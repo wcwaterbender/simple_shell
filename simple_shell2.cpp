@@ -4,12 +4,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include <unistd.h>
- 
+#include <unistd.h> 
 #include <sys/types.h>
 #include <sys/wait.h>
- 
-// The array below will hold the arguments: args[0] is the command
+#include <fcntl.h>
 static char* args[512];
 pid_t pid;
 int command_pipe[2];
@@ -18,9 +16,9 @@ int command_pipe[2];
 #define WRITE 1
 
 static void split(char* cmd);
-static int command(int input, int first, int last);
+static int command(int input, int output, int first);
 static char* skipwhite(char* s);
-static int run(char* cmd, int input, int first, int last);
+static int run(char* cmd, int input, int output, int first);
 static void cleanup(int n);
 static char line[1024];
 static int n = 0; // number of calls to 'command'
@@ -35,50 +33,83 @@ int main()
 		// Read a command line
 		if (!fgets(line, 1024, stdin)) 
 			return 0;
- 
-		int input = 0;
+
+		char *inputFile = NULL;
+		char *outputFile = NULL;
+		char* cmd = line;
+ 		char* inputRedir = strchr(cmd, '<'); // find input redir if present
+ 		char* outputRedir = strchr(cmd, '>'); // find output redir if present
+ 		char* appendRedir = strstr(cmd, ">>"); //find append redir if present
+ 		int input,output;
+ 		if(inputRedir!=NULL){
+ 			*inputRedir = '\0';
+ 			inputFile = strtok(inputRedir + 1, " \t\n");
+ 			if((open(inputFile, O_RDONLY))<0)
+ 				exit(-1);
+ 			input = open(inputFile, O_RDONLY);
+ 		}
+ 		else
+ 			input = 0;
+
+ 		if(appendRedir!=NULL){
+ 			*appendRedir = '\0';
+ 			outputFile = strtok(appendRedir + 2, " \t\n");
+ 			output = open(outputFile, O_CREAT | O_RDWR | O_APPEND,S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH );
+ 		}
+ 		else if(appendRedir==NULL && outputRedir!=NULL){
+ 			*outputRedir = '\0';
+ 			outputFile = strtok(outputRedir + 1, " \t\n");
+ 			output = open(outputFile, O_WRONLY | O_TRUNC | O_CREAT, S_IRUSR | S_IRGRP | S_IWGRP | S_IWUSR);
+ 		}
+ 		else
+ 			output = 0; 
+		
 		int first = 1;
  
-		char* cmd = line;
 		char* next = strchr(cmd, '|'); // Find first '|' if present
  
-		while (next != NULL) {
+	    // check if a pipe is present and execute this if block
+		if (next!=NULL){
 			*next = '\0';
-			input = run(cmd, input, first, 0);
- 
-			cmd = next + 1;
-			next = strchr(cmd, '|'); // Find next '|' if present
+			input = run(cmd,input,output,first);
+			cmd = next+1;
 			first = 0;
 		}
-		input = run(cmd, input, first, 1);
+		else
+			first=0; 
+		input = run(cmd, input,output,first);
+		if (input!=0){
+			close(input);
+		}
+		if (output!=0){
+			close(output);
+		}
 		cleanup(n);
 		n = 0;
 	}
 	return 0;
 }
  
-static void split(char* cmd);
- 
-static int run(char* cmd, int input, int first, int last)
+static int run(char* cmd, int input,int output, int first)
 {
 	split(cmd);
 	if (args[0] != NULL) {
 		if (strcmp(args[0], "exit") == 0) 
 			exit(0);
 		n += 1;
-		return command(input, first, last);
+		return command(input, output, first);
 	}
 	return 0;
 }
-
-// skip whitespaces in the command 
+ 
+// skip whitespaces in the command
 static char* skipwhite(char* s)
 {
 	while (isspace(*s)) ++s;
 	return s;
 }
-
-//split the command and it's arguments 
+ 
+//split the command and it's arguments
 static void split(char* cmd)
 {
 	cmd = skipwhite(cmd);
@@ -104,7 +135,7 @@ static void split(char* cmd)
 }
 
 //run the command
-static int command(int input, int first, int last)
+static int command(int input, int output, int first)
 {
 	int pipettes[2];
  
@@ -112,16 +143,18 @@ static int command(int input, int first, int last)
 	pid = fork();
  
 	if (pid == 0) {
-		if (first == 1 && last == 0 && input == 0) {
+		if (first == 1) {
 			// First command
 			dup2( pipettes[WRITE], STDOUT_FILENO );
-		} else if (first == 0 && last == 0 && input != 0) {
-			// middle commands
-			dup2(input, STDIN_FILENO);
-			dup2(pipettes[WRITE], STDOUT_FILENO);
-		} else {
-			// last command
-			dup2( input, STDIN_FILENO );
+		}else {
+			// Second command
+			if (output==0) {
+			dup2( input, STDIN_FILENO ); //display on prompt
+			}else {
+				// Second command
+				dup2( input, 0);
+				dup2(output, 1);
+			}
 		}
  
 		if (execvp( args[0], args) == -1)
@@ -134,8 +167,8 @@ static int command(int input, int first, int last)
 	// Nothing more needs to be written
 	close(pipettes[WRITE]);
  
-	// If it's the last command, nothing more needs to be read
-	if  (last == 1)
+	// If it's the Second command, nothing more needs to be read
+	if (first == 0)
 		close(pipettes[READ]);
  
 	return pipettes[READ];
