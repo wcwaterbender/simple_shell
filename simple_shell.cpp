@@ -101,7 +101,7 @@ static int command(int input,int output, int first, int last, int bg, int redir)
 			// last command
 			dup2( input, STDIN_FILENO );
 		}
-		if (execvp( args[0], args) == -1)
+		if (execvp( args[0], args) == -1)	
 			perror("ERROR"); // If child fails
 	}
 	else{//parent
@@ -126,7 +126,7 @@ static int command(int input,int output, int first, int last, int bg, int redir)
 		   close(errorno[1]);
 		   while(read(errorno[0], buffer, sizeof(buffer)) != 0){
 		   }
-		   fprintf(stderr,"ERROR : %s",buffer);
+		   fprintf(stderr,"ERROR: %s",buffer);
             }
         } while (!WIFEXITED(status) && !WIFSIGNALED(status));
 	}
