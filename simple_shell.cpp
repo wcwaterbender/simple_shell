@@ -194,7 +194,7 @@ void shell_loop(int flag){
 		char rebuild[1024];
 		char* inputRedir = strchr(cmd, '<');
 		char* pipeLoc = strchr(cmd,'|');
-		
+		char* outputRedir = strchr(cmd, '>');
 	        int input, output;
 		int redir = 0;	
 		
@@ -213,6 +213,11 @@ void shell_loop(int flag){
 				strcat(rebuild,pipeLoc);
 				cmd = rebuild;
 			}
+			else if(outputRedir != NULL){
+				strcpy(rebuild,cmd);
+				strcat(rebuild,outputRedir);
+				cmd = rebuild;
+			}
  		}
 		else{
  			input = 0;
@@ -220,7 +225,7 @@ void shell_loop(int flag){
 		
 			
 			
-		char* outputRedir = strchr(cmd, '>');
+		outputRedir = strchr(cmd, '>');
 		if(outputRedir !=NULL) {
 			*outputRedir = '\0';
  			outputFile = strtok(outputRedir + 1, " \t\n");
