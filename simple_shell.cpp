@@ -29,20 +29,13 @@ void func(int signum)
     wait(NULL); 
 }
 
-char **split_input(char *input){
-	char **command = (char **)malloc(512 * sizeof(char *));
-	char *parsed;
-	int index = 0;
-	parsed = strtok(input, " \n");
-        while (parsed != NULL) {
-        	command[index] = parsed;
-            	index++;
-		parsed = strtok(NULL, " \n");
-        } 
-
-    command[index] = NULL;
-    return command;
+int cd(char **args){
+	if (chdir(args[1]) != 0){
+		perror("ERROR");
+	}
+	return 1;
 }
+
 
 static char* skipwhite(char* s)
 {
@@ -53,9 +46,10 @@ static char* skipwhite(char* s)
 static void split(char* cmd)
 {
 	cmd = skipwhite(cmd);
+	
 	char* next = strchr(cmd, ' ');
 	int i = 0;
- 
+ 	
 	while(next != NULL) {
 		next[0] = '\0';
 		args[i] = cmd;
@@ -63,6 +57,7 @@ static void split(char* cmd)
 		cmd = skipwhite(next + 1);
 		next = strchr(cmd, ' ');
 	}
+	
  	//if command is not empty
 	if (cmd[0] != '\0') {
 		args[i] = cmd;
@@ -70,7 +65,6 @@ static void split(char* cmd)
 		next[0] = '\0';
 		++i; 
 	}
- 
 	args[i] = NULL;
 	
 }
@@ -103,15 +97,19 @@ static int command(int input,int output, int first, int last, int bg, int redir)
 			dup2( input, STDIN_FILENO );
 		}
 		if (execvp( args[0], args) == -1)
-			perror("ERROR: "); // If child fails
+			perror("ERROR"); // If child fails
 	}
-	/*else{//parent
+	else{//parent
 		if(!(bg)){
-			waitpid(pid,&status,WUNTRACED);
+			if( waitpid( pid, &status, 0 ) == -1 ) {
+  				perror( "waitpid" );
+			} else if( WIFEXITED( status ) && WEXITSTATUS( status ) != 0 ) {
+    				perror("ERROR"); /* The child failed! */
+			}
 		}else{
 			signal(SIGCHLD,func);
 		}
-	}*/
+	}
 	if (input != 0) 
 		close(input);
  
@@ -133,11 +131,19 @@ static void cleanup(int n)
 }
 
 static int run(char* cmd, int input, int output, int first, int last, int bg, int redir)
-{
+{       
+	
 	split(cmd);
+	
 	if (args[0] != NULL) {
 		if (strcmp(args[0], "exit") == 0) 
 			exit(0);
+		if (strcmp(args[0], "cd") == 0){
+			if(args[1] == NULL)
+				args[1] = getenv("HOME");
+			cd(args);
+			return 0;
+		}
 		n += 1;
 		return command(input,output, first, last, bg, redir);
 	}
@@ -149,7 +155,7 @@ char *clean_input(char *input){
 	int j = 1;
 	clean[0] = input[0];
 	for( int i = 1; input[i]!='\0'; ++i){
-		if((input[i] == '<') || (input[i] == '>') || (input[i] == '|') || (input[i] == '&')){
+		if((input[i] == '<') || (input[i] == '>') || (input[i] == '|')){
 			clean[j] = ' ';
 			clean[j+1] = input[i];
 			clean[j+2] = ' ';
@@ -177,9 +183,11 @@ void shell_loop(int flag){
 		if(strchr(line1,'&') != NULL){
 			bgFlag = 1;
 			//trim off the &
-			line1[strlen(line1)-2] = 0;
+			line1[strlen(line1)-2] = '\n';
 		}
+		
 		line = clean_input(line1);
+		
 		char* cmd = line;
 		char *inputFile = NULL;
 		char *outputFile = NULL;
@@ -196,7 +204,7 @@ void shell_loop(int flag){
  			*inputRedir = '\0';
  			inputFile = strtok(inputRedir + 1, " \t\n");
  			if((open(inputFile, O_RDONLY))<0){
- 				perror("ERROR: ");
+ 				perror("ERROR");
 				exit(-1);
 			}
  			input = open(inputFile, O_RDONLY);
@@ -233,13 +241,13 @@ void shell_loop(int flag){
 		while (next != NULL) {
 			*next = '\0';
 			input = run(cmd, input, output, first, 0, bgFlag, redir);
- 
 			cmd = next + 1;
 			next = strchr(cmd, '|'); // Find next '|' if present
 			first = 0;
 			redir = 0;
 		}
 		first = 0;
+			
 		input = run(cmd, input, output, first, 1, bgFlag,redir);
 	
 		if (input!=0){
