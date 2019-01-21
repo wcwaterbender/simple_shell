@@ -103,15 +103,15 @@ static int command(int input,int output, int first, int last, int bg, int redir)
 			dup2( input, STDIN_FILENO );
 		}
 		if (execvp( args[0], args) == -1)
-			_exit(EXIT_FAILURE); // If child fails
+			perror("ERROR: "); // If child fails
 	}
-	else{//parent
+	/*else{//parent
 		if(!(bg)){
 			waitpid(pid,&status,WUNTRACED);
 		}else{
 			signal(SIGCHLD,func);
 		}
-	}
+	}*/
 	if (input != 0) 
 		close(input);
  
@@ -185,7 +185,6 @@ void shell_loop(int flag){
 		char *outputFile = NULL;
 		char rebuild[1024];
 		char* inputRedir = strchr(cmd, '<');
-		char* outputRedir = strchr(cmd, '>');
 		char* pipeLoc = strchr(cmd,'|');
 		
 	        int input, output;
@@ -212,7 +211,8 @@ void shell_loop(int flag){
 		}
 		
 			
-		
+			
+		char* outputRedir = strchr(cmd, '>');
 		if(outputRedir !=NULL) {
 			*outputRedir = '\0';
  			outputFile = strtok(outputRedir + 1, " \t\n");
