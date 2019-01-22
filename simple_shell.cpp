@@ -127,7 +127,7 @@ static int command(int input,int output, int first, int last, int bg, int redir)
 		   		}
 				close(errorno[0]);	
 				if(WEXITSTATUS( status ) > 1)
-					fprintf(stderr, "ERROR: %s : %s",args[0], buffer);
+					fprintf(stderr, "ERROR: %s: %s",args[0], buffer);
 				else
 					fprintf(stderr, "ERROR: %s", buffer);
 				bzero(buffer,1024);
