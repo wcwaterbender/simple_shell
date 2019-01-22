@@ -16,7 +16,7 @@ using namespace std;
 
 static char* args[512];
 pid_t pid, w;
-int status;
+int status, sid;
 int command_pipe[2];
 static int n = 0;
 static char line1[1024];
@@ -72,18 +72,27 @@ static void split(char* cmd)
 //run the command
 static int command(int input,int output, int first, int last, int bg, int redir)
 {
+	
 	int pipettes[2];
-
  	int errorno[2];
 	pipe (errorno);
 	pipe( pipettes );
-		
+	
+	fflush(stdout);
 	pid = fork();
+	
+	signal(SIGINT, NULL);
 
-	if (pid == 0) {//child
-		dup2(errorno[1],2); // capture error of child
-		close(errorno[1]);
-
+	signal(SIGCHLD,func);
+			
+	if( pid == -1)
+		perror("ERROR");
+	else if (pid == 0) {//child
+		//dup2(errorno[1],2); // capture error of child
+		//close(errorno[1]);
+		if(bg ==1){
+			sid = setsid();
+		}	
 		if (first == 1 && last == 0 && input == 0) {
 			// First command
 			dup2( pipettes[WRITE], STDOUT_FILENO );
@@ -105,31 +114,13 @@ static int command(int input,int output, int first, int last, int bg, int redir)
 			perror("ERROR"); // If child fails
 	}
 	else{//parent
-		/*if(!(bg)){
-			if( waitpid( pid, &status, 0 ) == -1 ) {
-  				perror( "waitpid" );
-			} else if( WIFEXITED( status ) && WEXITSTATUS( status ) != 0 ) {
-    				fprintf(stderr,"ERROR");  The child failed! 
-			}
-		}else{
-			signal(SIGCHLD,func);
-		}*/
-	do {
-            w = waitpid(pid, &status, WUNTRACED | WCONTINUED);
-            if (w == -1) {
-                perror("waitpid");
-                exit(EXIT_FAILURE);
-            }
-
-           if (WIFEXITED(status) && WEXITSTATUS( status ) != 0) {
-		   char buffer[1024];
-		   close(errorno[1]);
-		   while(read(errorno[0], buffer, sizeof(buffer)) != 0){
-		   }
-		   fprintf(stderr,"ERROR: %s",buffer);
-            }
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-	}
+		if(!bg){
+			 waitpid(pid, &status, 0);
+		}
+		else{
+			printf("here");
+		}
+	}		
 	if (input != 0) 
 		close(input);
  
@@ -192,7 +183,8 @@ char *clean_input(char *input){
 	
 
 void shell_loop(int flag){
-	
+	signal(SIGINT, SIG_IGN);
+
 	do{
 		if(!flag)
 			printf("shell: ");
@@ -296,6 +288,7 @@ int main(int argc, char **argv) {
 	//check for -n command passing
   	int flag, opt;
   	flag = 0;
+	
   	while ((opt = getopt(argc, argv, "n")) != -1) {
 		switch (opt) {
 			case 'n':
