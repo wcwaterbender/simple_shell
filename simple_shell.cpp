@@ -9,18 +9,20 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <errno.h>
 
 using namespace std;
 
 #define BUFFERSIZE 512
 
 static char* args[512];
-pid_t pid, w;
+pid_t w;
 int status, sid;
 int command_pipe[2];
 static int n = 0;
 static char line1[1024];
 static char* line;
+char errbuf[1024];
 #define READ  0
 #define WRITE 1
 
@@ -72,24 +74,21 @@ static void split(char* cmd)
 //run the command
 static int command(int input,int output, int first, int last, int bg, int redir)
 {
-	
 	int pipettes[2];
  	int errorno[2];
-	pipe (errorno);
-	pipe( pipettes );
+	pipe(errorno);
+	pipe(pipettes);
 	
-	fflush(stdout);
-	pid = fork();
 	
 	signal(SIGINT, NULL);
-
-	signal(SIGCHLD,func);
+	pid_t wpid;
+	pid_t pid = fork();
 			
 	if( pid == -1)
 		perror("ERROR");
 	else if (pid == 0) {//child
-		//dup2(errorno[1],2); // capture error of child
-		//close(errorno[1]);
+		dup2(errorno[1],2); // capture error of child
+		close(errorno[1]);
 		if(bg ==1){
 			sid = setsid();
 		}	
@@ -110,17 +109,36 @@ static int command(int input,int output, int first, int last, int bg, int redir)
 			// last command
 			dup2( input, STDIN_FILENO );
 		}
-		if (execvp( args[0], args) == -1)	
-			perror("ERROR"); // If child fails
+		if (execvp( args[0], args) == -1){
+			perror("");
+			exit(-1);
+		}
 	}
 	else{//parent
 		if(!bg){
-			 waitpid(pid, &status, 0);
+			 wpid = waitpid(pid, &status, 0);
+			 if(wpid != pid)
+				fprintf(stderr, "ERROR: %s: %s\n", args[0], strerror(errno));
+			 if (WIFEXITED(status) && WEXITSTATUS( status ) != 0){
+				char buffer[1024];
+				bzero(buffer,1024);
+		   		close(errorno[1]);
+		  		while(read(errorno[0], buffer, sizeof(buffer)) != 0){
+		   		}
+				close(errorno[0]);	
+				if(WEXITSTATUS( status ) > 1)
+					fprintf(stderr, "ERROR: %s : %s",args[0], buffer);
+				else
+					fprintf(stderr, "ERROR: %s", buffer);
+				bzero(buffer,1024);
+			 }
+
 		}
 		else{
-			printf("here");
-		}
-	}		
+			waitpid(pid, &status, WNOHANG | WCONTINUED);
+			signal(SIGCHLD,func);
+		}	
+	}	
 	if (input != 0) 
 		close(input);
  
@@ -129,17 +147,10 @@ static int command(int input,int output, int first, int last, int bg, int redir)
  
 	// If it's the last command, nothing more needs to be read
 	if  (last == 1)
-		close(pipettes[READ]);
- 
+		close(pipettes[READ]); 
 	return pipettes[READ];	
 }
 
-static void cleanup(int n)
-{
-	int i;
-	for (i = 0; i < n; ++i)
-		wait(NULL);
-}
 
 static int run(char* cmd, int input, int output, int first, int last, int bg, int redir)
 {       
@@ -217,7 +228,7 @@ void shell_loop(int flag){
  			inputFile = strtok(inputRedir + 1, " \t\n");
  			if((open(inputFile, O_RDONLY))<0){
  				perror("ERROR");
-				exit(-1);
+				continue;
 			}
  			input = open(inputFile, O_RDONLY);
 			if(pipeLoc != NULL){
@@ -273,11 +284,13 @@ void shell_loop(int flag){
 		if (output!=0){
 			close(output);
 		}
-		cleanup(n);
+		//cleanup(n);
 		n = 0;
 		
 		bzero(line,BUFFERSIZE);
+		
 		fflush(stdin);
+		bgFlag = 0 ;
 	} while(!feof(stdin));
 }
 
@@ -300,6 +313,8 @@ int main(int argc, char **argv) {
    	}
   
    	shell_loop(flag);
+	fflush(stdin);
+	fflush(stdout);	
  	return(0);
 
 }
