@@ -30,6 +30,10 @@ void func(int signum) {
   wait(NULL); 
 }
 
+void sigintH(int signum) {
+	exit(0);
+}
+
 int cd(char **args) {
 	if (chdir(args[1]) != 0) {
 		perror("ERROR");
@@ -75,13 +79,14 @@ static int command(int input,int output, int first, int last, int bg, int redir)
 	pipe(errorno);
 	pipe(pipettes);
 	
-	signal(SIGINT, NULL);
 	pid_t wpid;
 	pid_t pid = fork();
 			
 	if(pid == -1)
 		perror("ERROR");
 	else if(pid == 0) {//child
+		
+		signal(SIGINT, sigintH);
 		dup2(errorno[1],2); // capture error of child
 		close(errorno[1]);
 		if(bg ==1) {
@@ -137,10 +142,12 @@ static int command(int input,int output, int first, int last, int bg, int redir)
  
 	// Nothing more needs to be written
 	close(pipettes[WRITE]);
- 
+	close(errorno[WRITE]); 
 	// If it's the last command, nothing more needs to be read
-	if  (last == 1)
+	if  (last == 1){
 		close(pipettes[READ]); 
+		close(errorno[READ]);
+	}
 	return pipettes[READ];	
 }
 
@@ -209,7 +216,7 @@ void shell_loop(int flag) {
 		char* inputRedir = strchr(cmd, '<');
 		char* pipeLoc = strchr(cmd,'|');
 		char* outputRedir = strchr(cmd, '>');
-	  int input, output;
+	  	int input, output;
 		int redir = 0;	
 		
 		if(inputRedir!=NULL) {
@@ -268,11 +275,10 @@ void shell_loop(int flag) {
 		if (output!=0) {
 			close(output);
 		}
-		//cleanup(n);
 		n = 0;
 		
 		bzero(line,BUFFERSIZE);
-		
+	        bzero(line1,1024);	
 		fflush(stdin);
 		bgFlag = 0 ;
 	} while(!feof(stdin));
