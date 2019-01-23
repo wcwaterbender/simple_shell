@@ -26,27 +26,25 @@ char errbuf[1024];
 #define READ  0
 #define WRITE 1
 
-void func(int signum) 
-{ 
-    wait(NULL); 
+void func(int signum) { 
+  wait(NULL); 
 }
 
-int cd(char **args){
-	if (chdir(args[1]) != 0){
+int cd(char **args) {
+	if (chdir(args[1]) != 0) {
 		perror("ERROR");
 	}
 	return 1;
 }
 
 
-static char* skipwhite(char* s)
-{
+static char* skipwhite(char* s) {
 	while (isspace(*s)) ++s;
 	return s;
 }
+
 //split the command and it's arguments 
-static void split(char* cmd)
-{
+static void split(char* cmd) {
 	cmd = skipwhite(cmd);
 	
 	char* next = strchr(cmd, ' ');
@@ -68,73 +66,68 @@ static void split(char* cmd)
 		++i; 
 	}
 	args[i] = NULL;
-	
 }
 
 //run the command
-static int command(int input,int output, int first, int last, int bg, int redir)
-{
+static int command(int input,int output, int first, int last, int bg, int redir) {
 	int pipettes[2];
  	int errorno[2];
 	pipe(errorno);
 	pipe(pipettes);
 	
-	
 	signal(SIGINT, NULL);
 	pid_t wpid;
 	pid_t pid = fork();
 			
-	if( pid == -1)
+	if(pid == -1)
 		perror("ERROR");
-	else if (pid == 0) {//child
+	else if(pid == 0) {//child
 		dup2(errorno[1],2); // capture error of child
 		close(errorno[1]);
-		if(bg ==1){
+		if(bg ==1) {
 			sid = setsid();
 		}	
-		if (first == 1 && last == 0 && input == 0) {
+		if(first == 1 && last == 0 && input == 0) {
 			// First command
-			dup2( pipettes[WRITE], STDOUT_FILENO );
-		} else if (redir != 0) {
+			dup2(pipettes[WRITE], STDOUT_FILENO);
+		} else if(redir != 0) {
 			dup2(input, STDIN_FILENO);
-			dup2( pipettes[WRITE], STDOUT_FILENO );
-		} else if (first == 0 && last == 0 && input != 0) {
+			dup2(pipettes[WRITE], STDOUT_FILENO);
+		} else if(first == 0 && last == 0 && input != 0) {
 			// middle commands
 			dup2(input, STDIN_FILENO);
 			dup2(pipettes[WRITE], STDOUT_FILENO);
-		} else if (last ==1  && output != 0){//last command with output redir
-		   	dup2( input, 0);
-		       	dup2(output, 1);
+		} else if(last ==1  && output != 0) {//last command with output redir
+		 	dup2(input, 0);
+		  dup2(output, 1);
 		} else {
 			// last command
-			dup2( input, STDIN_FILENO );
+			dup2(input, STDIN_FILENO);
 		}
-		if (execvp( args[0], args) == -1){
+		if(execvp( args[0], args) == -1) {
 			perror("");
 			exit(-1);
 		}
 	}
-	else{//parent
-		if(!bg){
-			 wpid = waitpid(pid, &status, 0);
-			 if(wpid != pid)
+	else {//parent
+		if(!bg) {
+			wpid = waitpid(pid, &status, 0);
+			if(wpid != pid)
 				fprintf(stderr, "ERROR: %s: %s\n", args[0], strerror(errno));
-			 if (WIFEXITED(status) && WEXITSTATUS( status ) != 0){
+			if (WIFEXITED(status) && WEXITSTATUS( status ) != 0) {
 				char buffer[1024];
 				bzero(buffer,1024);
-		   		close(errorno[1]);
-		  		while(read(errorno[0], buffer, sizeof(buffer)) != 0){
-		   		}
+				close(errorno[1]);
+				while(read(errorno[0], buffer, sizeof(buffer)) != 0) {
+				}
 				close(errorno[0]);	
 				if(WEXITSTATUS( status ) > 1)
 					fprintf(stderr, "ERROR: %s: %s",args[0], buffer);
 				else
 					fprintf(stderr, "ERROR: %s", buffer);
 				bzero(buffer,1024);
-			 }
-
-		}
-		else{
+			}
+		} else {
 			waitpid(pid, &status, WNOHANG | WCONTINUED);
 			signal(SIGCHLD,func);
 		}	
@@ -152,15 +145,14 @@ static int command(int input,int output, int first, int last, int bg, int redir)
 }
 
 
-static int run(char* cmd, int input, int output, int first, int last, int bg, int redir)
-{       
+static int run(char* cmd, int input, int output, int first, int last, int bg, int redir) {       
 	
 	split(cmd);
 	
 	if (args[0] != NULL) {
 		if (strcmp(args[0], "exit") == 0) 
 			exit(0);
-		if (strcmp(args[0], "cd") == 0){
+		if (strcmp(args[0], "cd") == 0) {
 			if(args[1] == NULL)
 				args[1] = getenv("HOME");
 			cd(args);
@@ -172,18 +164,17 @@ static int run(char* cmd, int input, int output, int first, int last, int bg, in
 	return 0;
 }
 
-char *clean_input(char *input){
+char *clean_input(char *input) {
 	char * clean = (char *)malloc(1024 * sizeof(char));
 	int j = 1;
 	clean[0] = input[0];
-	for( int i = 1; input[i]!='\0'; ++i){
-		if((input[i] == '<') || (input[i] == '>') || (input[i] == '|')){
+	for(int i = 1; input[i]!='\0'; ++i) {
+		if((input[i] == '<') || (input[i] == '>') || (input[i] == '|')) {
 			clean[j] = ' ';
 			clean[j+1] = input[i];
 			clean[j+2] = ' ';
 			j = j+3;
-		}
-		else{
+		} else {
 			clean[j] = input[i];
 			j = j+1;
 		}
@@ -193,17 +184,17 @@ char *clean_input(char *input){
 }
 	
 
-void shell_loop(int flag){
+void shell_loop(int flag) {
 	signal(SIGINT, SIG_IGN);
 
-	do{
+	do {
 		if(!flag)
 			printf("shell: ");
 
 		fgets(line1,BUFFERSIZE,stdin);
 		int bgFlag = 0;
 		//check bg process and strip the &
-		if(strchr(line1,'&') != NULL){
+		if(strchr(line1,'&') != NULL) {
 			bgFlag = 1;
 			//trim off the &
 			line1[strlen(line1)-2] = '\n';
@@ -218,35 +209,29 @@ void shell_loop(int flag){
 		char* inputRedir = strchr(cmd, '<');
 		char* pipeLoc = strchr(cmd,'|');
 		char* outputRedir = strchr(cmd, '>');
-	        int input, output;
+	  int input, output;
 		int redir = 0;	
 		
-
-
-		if(inputRedir!=NULL){
+		if(inputRedir!=NULL) {
  			*inputRedir = '\0';
  			inputFile = strtok(inputRedir + 1, " \t\n");
- 			if((open(inputFile, O_RDONLY))<0){
+ 			if((open(inputFile, O_RDONLY))<0) {
  				perror("ERROR");
 				continue;
 			}
  			input = open(inputFile, O_RDONLY);
-			if(pipeLoc != NULL){
+			if(pipeLoc != NULL) {
 				strcpy(rebuild,cmd);
 				strcat(rebuild,pipeLoc);
 				cmd = rebuild;
-			}
-			else if(outputRedir != NULL){
+			} else if(outputRedir != NULL) {
 				strcpy(rebuild,cmd);
 				strcat(rebuild,outputRedir);
 				cmd = rebuild;
 			}
- 		}
-		else{
+ 		} else {
  			input = 0;
 		}
-		
-			
 			
 		outputRedir = strchr(cmd, '>');
 		if(outputRedir !=NULL) {
@@ -257,15 +242,14 @@ void shell_loop(int flag){
  		else
  			output = 0;
 		
-		
 		int first = 1;
 
-			
 		char* next = strchr(cmd, '|');
-		if(next != NULL){
+		if(next != NULL) {
 			redir = 1;
 		}
-	        //go through command list	
+		
+		//go through command list	
 		while (next != NULL) {
 			*next = '\0';
 			input = run(cmd, input, output, first, 0, bgFlag, redir);
@@ -278,10 +262,10 @@ void shell_loop(int flag){
 			
 		input = run(cmd, input, output, first, 1, bgFlag,redir);
 	
-		if (input!=0){
+		if (input!=0) {
 			close(input);
 		}
-		if (output!=0){
+		if (output!=0) {
 			close(output);
 		}
 		//cleanup(n);
@@ -296,25 +280,23 @@ void shell_loop(int flag){
 
 
 
-
 int main(int argc, char **argv) {
 	//check for -n command passing
   	int flag, opt;
   	flag = 0;
 	
   	while ((opt = getopt(argc, argv, "n")) != -1) {
-		switch (opt) {
-			case 'n':
-				flag = 1;
-				break;
-			default:
-				break;
-		}
+			switch (opt) {
+				case 'n':
+					flag = 1;
+					break;
+				default:
+					break;
+			}
    	}
   
-   	shell_loop(flag);
+  shell_loop(flag);
 	fflush(stdin);
 	fflush(stdout);	
  	return(0);
-
 }
